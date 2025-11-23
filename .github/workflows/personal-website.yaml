@@ -44,7 +44,7 @@ jobs:
       - name: Checkout infra repository
         uses: actions/checkout@v3
         with:
-          repository: Braeden6/monorepo/personal-website
+          repository: Braeden6/monorepo
           token: ${{ secrets.PAT_TOKEN }}
       - name: Install Kustomize
         uses: imranismail/setup-kustomize@v2
