@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { Providers } from "@/components/providers";
 import "@workspace/ui/globals.css";
 import "./custom.css";
-import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
 	title: "Braeden's Web App",
 	description: "Personal web application",
 	icons: {
-		icon: "/logo.svg",
+		icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
+		apple: [{ url: "/logo.svg", type: "image/svg+xml" }],
 	},
 };
 

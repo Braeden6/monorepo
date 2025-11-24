@@ -1,30 +1,28 @@
 FROM node:23-alpine AS base
 
-FROM base AS deps
+FROM base AS builder
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+RUN npm install -g turbo
+COPY . .
+RUN turbo prune web --docker
+
+FROM base AS installer
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 
-COPY apps ./apps
-COPY packages ./packages
+COPY --from=builder /app/out/json/ .
+COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
 
 
-FROM base AS builder
-WORKDIR /app
+COPY --from=builder /app/out/full/ .
+COPY turbo.json turbo.json
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps ./apps
-COPY --from=deps /app/packages ./packages
-COPY --from=deps /app/package.json ./package.json
-COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=deps /app/turbo.json ./turbo.json
-
-RUN npm install -g pnpm
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
 RUN pnpm turbo run build --filter=web...
 
 
@@ -37,11 +35,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+RUN mkdir .next
+RUN chown nextjs:nodejs .next
+
+COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=installer --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 USER nextjs
+
 EXPOSE 3000
+
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
