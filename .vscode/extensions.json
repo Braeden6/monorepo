@@ -1,0 +1,21 @@
+{
+	"recommendations": [
+		"biomejs.biome",
+		"eamodio.gitlens",
+		"mikestead.dotenv",
+		"redhat.vscode-yaml",
+		"streetsidesoftware.code-spell-checker",
+		"christian-kohler.path-intellisense",
+		"christian-kohler.npm-intellisense",
+		"GitHub.vscode-pull-request-github",
+		"GitHub.vscode-github-actions",
+		"AmazonWebServices.aws-toolkit-vscode",
+		"yoavbls.pretty-ts-errors",
+		"ms-playwright.playwright"
+	],
+	"unwantedRecommendations": [
+		"dbaeumer.vscode-eslint",
+		"esbenp.prettier-vscode",
+		"stylelint.vscode-stylelint"
+	]
+}
