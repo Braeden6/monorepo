@@ -1,7 +1,7 @@
 name: CI/CD
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 env:
   REGISTRY: ghcr.io
 jobs:
@@ -25,7 +25,30 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/braeden6/monorepo/web:latest
+          tags: |
+            ${{ env.REGISTRY }}/braeden6/monorepo/web:latest
+            ${{ env.REGISTRY }}/braeden6/monorepo/web:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Update system_setup manifests
+        uses: actions/checkout@v3
+        with:
+          repository: braeden6/system_setup
+          token: ${{ secrets.PAT_TOKEN }}
+          path: system_setup
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Update Image Tag in Kustomization
+        run: |
+          cd system_setup/v3/deployments/personal-website
+          kustomize edit set image ghcr.io/braeden6/monorepo/web:${{ github.sha }}
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add kustomization.yaml
+          git commit -m "Update personal-website image to ${{ github.sha }}"
+          git push
