@@ -1,9 +1,9 @@
 "use client";
 
+import SpotlightCard from "@workspace/ui/components/react-bits/SpotlightCard";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { SpotlightCard } from "./spotlight-card";
 
 type CardItem = {
 	id: string;
@@ -11,7 +11,7 @@ type CardItem = {
 	description: string;
 	icon: LucideIcon;
 	color: string;
-	spotlight: string;
+	spotlight: `rgba(${number}, ${number}, ${number}, ${number})`;
 };
 
 type CardCarouselProps = {
@@ -45,34 +45,25 @@ export function CardCarousel({ items }: CardCarouselProps) {
 						className="h-[250px] w-[280px] flex-shrink-0"
 					>
 						<SpotlightCard
-							className="h-full p-6 backdrop-blur-sm transition-all hover:bg-white/10"
+							className="h-full p-6"
 							spotlightColor={item.spotlight}
 						>
-							<div
-								className={`absolute inset-0 -z-10 bg-gradient-to-br ${item.color} opacity-0 transition-opacity duration-500 group-hover:opacity-20`}
-							/>
-
-							<div className="mb-4 flex items-center justify-between">
-								<div className="rounded-full bg-white/10 p-2 ring-1 ring-white/20">
-									<item.icon className="h-5 w-5 text-white" />
+							<div className="flex h-full flex-col">
+								<div className="mb-4 flex items-center justify-between">
+									<div className="rounded-full bg-white/10 p-2 ring-1 ring-white/20">
+										<item.icon className="h-5 w-5 text-white" />
+									</div>
+									<span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-white/60 ring-1 ring-white/10">
+										Coming Soon
+									</span>
 								</div>
-								<span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-white/60 ring-1 ring-white/10">
-									Coming Soon
-								</span>
-							</div>
 
-							<h3 className="mb-2 text-xl font-bold text-white">
-								{item.title}
-							</h3>
-							<p className="text-sm text-gray-400">{item.description}</p>
-
-							<div className="absolute bottom-6 left-6 right-6 h-1 rounded-full bg-white/10">
-								<motion.div
-									className="h-full rounded-full bg-white/40"
-									initial={{ width: "0%" }}
-									whileHover={{ width: "100%" }}
-									transition={{ duration: 0.3 }}
-								/>
+								<h3 className="mb-2 text-xl font-bold text-white">
+									{item.title}
+								</h3>
+								<p className="text-sm text-muted-foreground">
+									{item.description}
+								</p>
 							</div>
 						</SpotlightCard>
 					</motion.div>

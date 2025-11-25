@@ -15,7 +15,7 @@ const carouselItems = [
 			"My journey, skills, and philosophy on building digital products.",
 		icon: User,
 		color: "from-blue-500 to-cyan-500",
-		spotlight: "rgba(59, 130, 246, 0.25)",
+		spotlight: "rgba(59, 130, 246, 0.25)" as const,
 	},
 	{
 		id: "blog",
@@ -24,7 +24,7 @@ const carouselItems = [
 			"Thoughts on software engineering, design patterns, and the future.",
 		icon: Globe,
 		color: "from-purple-500 to-pink-500",
-		spotlight: "rgba(168, 85, 247, 0.25)",
+		spotlight: "rgba(168, 85, 247, 0.25)" as const,
 	},
 	{
 		id: "projects",
@@ -33,7 +33,7 @@ const carouselItems = [
 			"A showcase of my recent work, open source contributions, and experiments.",
 		icon: Cpu,
 		color: "from-emerald-500 to-lime-500",
-		spotlight: "rgba(16, 185, 129, 0.25)",
+		spotlight: "rgba(16, 185, 129, 0.25)" as const,
 	},
 ];
 
