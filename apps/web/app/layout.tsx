@@ -1,3 +1,5 @@
+import { ClerkProvider } from "@clerk/nextjs";
+import { env } from "@workspace/ui/env";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
@@ -31,18 +33,21 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" suppressHydrationWarning>
-			<body
-				className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased`}
-			>
-				<Providers>{children}</Providers>
-				{/* No best practice to have id hardcode, but 🤷 */}
-				<Script
-					src="https://umami.braeden6.com/script.js"
-					data-website-id="8547cec2-6e15-47e4-825e-48524c3bd914"
-					strategy="afterInteractive"
-				/>
-			</body>
-		</html>
+		<ClerkProvider
+			allowedRedirectOrigins={env.NEXT_PUBLIC_REDIRECT_URL.split(",")}
+		>
+			<html lang="en" suppressHydrationWarning>
+				<body
+					className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased bg-background text-foreground`}
+				>
+					<Providers>{children}</Providers>
+					<Script
+						src="https://umami.braeden6.com/script.js"
+						data-website-id={env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
+						strategy="afterInteractive"
+					/>
+				</body>
+			</html>
+		</ClerkProvider>
 	);
 }
