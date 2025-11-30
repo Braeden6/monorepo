@@ -22,7 +22,7 @@ COPY turbo.json turbo.json
 
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG SKIP_ENV_VALIDATION=true
+ENV SKIP_ENV_VALIDATION=true
 
 RUN pnpm turbo run build --filter=web...
 
