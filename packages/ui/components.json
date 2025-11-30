@@ -13,8 +13,12 @@
 	"aliases": {
 		"components": "@workspace/ui/components",
 		"utils": "@workspace/ui/lib/utils",
-		"hooks": "@workspace/ui/hooks",
+		"ui": "@workspace/ui/components/shadcn",
 		"lib": "@workspace/ui/lib",
-		"ui": "@workspace/ui/components/shadcn"
+		"hooks": "@workspace/ui/hooks"
+	},
+	"registries": {
+		"@react-bits": "https://reactbits.dev/r/{name}.json",
+		"@magicui": "https://magicui.design/r/{name}.json"
 	}
 }

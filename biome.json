@@ -11,7 +11,8 @@
 			"apps/**",
 			"packages/**",
 			"!**/*.css",
-			"!packages/ui/src/components/shadcn"
+			"!packages/ui/src/components/shadcn",
+			"!packages/ui/src/components/react-bits"
 		]
 	},
 	"formatter": {
