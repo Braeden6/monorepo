@@ -54,23 +54,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # - name: Update system_setup manifests
-      #   uses: actions/checkout@v3
-      #   with:
-      #     repository: braeden6/system_setup
-      #     token: ${{ secrets.PAT_TOKEN }}
-      #     path: system_setup
+      - name: Update system_setup manifests
+        uses: actions/checkout@v3
+        with:
+          repository: braeden6/system_setup
+          token: ${{ secrets.PAT_TOKEN }}
+          path: system_setup
 
-      # - name: Setup Kustomize
-      #   uses: imranismail/setup-kustomize@v2
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
 
-      # - name: Update Image Tag in Kustomization
-      #   run: |
-      #     cd system_setup/v3/deployments/auth-website
-      #     kustomize edit set image ghcr.io/braeden6/monorepo/auth:${{ github.sha }}
+      - name: Update Image Tag in Kustomization
+        run: |
+          cd system_setup/v3/deployments/auth-website
+          kustomize edit set image ghcr.io/braeden6/monorepo/auth:${{ github.sha }}
 
-      #     git config user.name "GitHub Actions"
-      #     git config user.email "actions@github.com"
-      #     git add kustomization.yaml
-      #     git commit -m "Update personal-website image to ${{ github.sha }}"
-      #     git push
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add kustomization.yaml
+          git commit -m "Update auth-website image to ${{ github.sha }}"
+          git push
