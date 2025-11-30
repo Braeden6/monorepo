@@ -6,7 +6,6 @@ import Script from "next/script";
 
 import { Providers } from "@/components/providers";
 import "@workspace/ui/globals.css";
-import "./custom.css";
 
 export const metadata: Metadata = {
 	title: "Braeden's Web App",
