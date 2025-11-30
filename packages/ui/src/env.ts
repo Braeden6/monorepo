@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const env = createEnv({
 	server: {
-		CLERK_SECRET_KEY: z.string().min(1),
+		CLERK_SECRET_KEY: z.string().min(1).default("build-time-placeholder"),
 	},
 	client: {
 		NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
@@ -19,5 +19,4 @@ export const env = createEnv({
 		NEXT_PUBLIC_DOMAIN: process.env.NEXT_PUBLIC_DOMAIN,
 		NEXT_PUBLIC_REDIRECT_URL: process.env.NEXT_PUBLIC_REDIRECT_URL,
 	},
-	skipValidation: !!process.env.SKIP_ENV_VALIDATION,
 });
