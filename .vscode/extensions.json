@@ -11,7 +11,8 @@
 		"GitHub.vscode-github-actions",
 		"AmazonWebServices.aws-toolkit-vscode",
 		"yoavbls.pretty-ts-errors",
-		"ms-playwright.playwright"
+		"ms-playwright.playwright",
+		"astral-sh.ruff"
 	],
 	"unwantedRecommendations": [
 		"dbaeumer.vscode-eslint",
