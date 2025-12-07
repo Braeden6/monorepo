@@ -6,6 +6,7 @@ import { RetroGrid } from "@workspace/ui/components/react-bits/retro-grid";
 import { Meteors } from "@workspace/ui/components/shadcn/meteors";
 import { motion } from "framer-motion";
 import { Code2, Cpu, Globe, User } from "lucide-react";
+import { CreateTokenButton } from "@/components/create-token-button";
 import { CardCarousel } from "@/components/ui/card-carousel";
 import { SocialLinks } from "@/components/ui/social-links";
 
@@ -57,7 +58,10 @@ export default function Page() {
 
 			<div className="absolute top-4 right-4 z-50">
 				<SignedIn>
-					<UserButton />
+					<div className="flex items-center gap-4">
+						<CreateTokenButton />
+						<UserButton />
+					</div>
 				</SignedIn>
 			</div>
 
