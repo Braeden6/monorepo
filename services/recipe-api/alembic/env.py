@@ -1,10 +1,11 @@
 from logging.config import fileConfig
 
+import alembic_postgresql_enum  # noqa: F401 - Enables automatic PostgreSQL enum handling
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from recipe_api.shared.config import settings
-from recipe_api.shared.models import Recipe, UserRecipeInteraction  # noqa: F401
+from recipe_api.shared.models import Recipe, UserRecipeInteraction, GenerationLog  # noqa: F401
 from sqlmodel import SQLModel
 
 config = context.config
@@ -14,11 +15,6 @@ if config.config_file_name is not None:
 
 config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = SQLModel.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:

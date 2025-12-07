@@ -17,18 +17,36 @@ class FoodType(str, Enum):
     SNACK = "SNACK"
     DRINK = "DRINK"
 
+
 class RecipeStatus(str, Enum):
     PUBLISHED = "PUBLISHED"
     DRAFT = "DRAFT"
+
+
+class GenerationStep(str, Enum):
+    QUEUED = "QUEUED"
+    GENERATING = "GENERATING"
+    REVIEWING = "REVIEWING"
+    FIXING = "FIXING"
+    SAVING = "SAVING"
+    COMPLETED = "COMPLETED"
+
+
+class GenerationStatus(str, Enum):
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
 
 class Recipe(SQLModel, table=True):
     __tablename__ = "recipes"  # type: ignore
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    name: str = Field(index=True, max_length=255)
-    description: str
-    ingredients: list[dict[str, Any]] = Field(sa_column=Column(JSON))
-    instructions: str
+    name: str = Field(default="", index=True, max_length=255)
+    description: str = Field(default="")
+    ingredients: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
+    instructions: str = Field(default="")
     food_type: FoodType | None = Field(default=None)
     status: RecipeStatus = Field(default=RecipeStatus.DRAFT, index=True)
     is_generated: bool = Field(default=False)
@@ -47,6 +65,12 @@ class Recipe(SQLModel, table=True):
 
     like_count: int = Field(default=0)
     favorite_count: int = Field(default=0)
+
+    workflow_id: str | None = Field(default=None, index=True)
+    generation_step: GenerationStep | None = Field(default=None, index=True)
+    generation_status: GenerationStatus | None = Field(default=None, index=True)
+    generation_error: str | None = Field(default=None)
+    generation_prompt: str | None = Field(default=None)
 
     __table_args__ = (
         Index(

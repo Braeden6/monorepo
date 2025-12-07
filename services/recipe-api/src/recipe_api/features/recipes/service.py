@@ -5,7 +5,13 @@ from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
 from recipe_api.features.recipes.schemas import RecipeCreate, RecipeUpdate
-from recipe_api.shared.models.recipe import Recipe, RecipeStatus
+from recipe_api.shared.models.recipe import (
+    FoodType,
+    GenerationStatus,
+    GenerationStep,
+    Recipe,
+    RecipeStatus,
+)
 from recipe_api.shared.services.embeddings import EmbeddingService
 
 
@@ -93,14 +99,85 @@ class RecipeService:
 
         return recipe
 
-    def delete_recipe(self, recipe_id: uuid.UUID, user_id: str) -> None:
-        recipe = self.get_recipe(recipe_id)
-
-        if recipe.created_by != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only delete your own recipes",
-            )
-
         self.session.delete(recipe)
         self.session.commit()
+
+    def create_placeholder(
+        self,
+        user_id: str,
+        workflow_id: str,
+        prompt: str,
+    ) -> Recipe:
+        recipe = Recipe(
+            id=uuid.uuid4(),
+            created_by=user_id,
+            is_generated=True,
+            workflow_id=workflow_id,
+            generation_step=GenerationStep.QUEUED,
+            generation_status=GenerationStatus.PENDING,
+            generation_prompt=prompt,
+        )
+        self.session.add(recipe)
+        self.session.commit()
+        self.session.refresh(recipe)
+        return recipe
+
+    def update_generation_status(
+        self,
+        recipe_id: uuid.UUID,
+        step: GenerationStep | None = None,
+        status: GenerationStatus | None = None,
+        error: str | None = None,
+    ) -> None:
+        recipe = self.get_recipe(recipe_id)
+        if step:
+            recipe.generation_step = step
+        if status:
+            recipe.generation_status = status
+        if error:
+            recipe.generation_error = error
+        recipe.updated_at = datetime.utcnow()
+        self.session.add(recipe)
+        self.session.commit()
+
+    def finalize_generated_recipe(
+        self,
+        recipe_id: uuid.UUID,
+        name: str,
+        description: str,
+        ingredients: list[dict],
+        instructions: str | list[str],
+        food_type_str: str | None,
+    ) -> Recipe:
+        recipe = self.get_recipe(recipe_id)
+
+        food_type = None
+        if food_type_str:
+            import contextlib
+
+            with contextlib.suppress(ValueError):
+                food_type = FoodType(food_type_str)
+
+        if isinstance(instructions, list):
+            instructions = "\n".join(instructions)
+
+        description_embedding = self.embedding_service.encode(description)
+        ingredient_text = " ".join([ing.get("name", "") for ing in ingredients])
+        ingredient_embedding = self.embedding_service.encode(ingredient_text)
+
+        recipe.name = name
+        recipe.description = description
+        recipe.ingredients = ingredients
+        recipe.instructions = instructions
+        recipe.food_type = food_type
+        recipe.description_embedding = description_embedding
+        recipe.ingredient_embedding = ingredient_embedding
+
+        recipe.generation_step = GenerationStep.COMPLETED
+        recipe.generation_status = GenerationStatus.COMPLETED
+        recipe.updated_at = datetime.utcnow()
+
+        self.session.add(recipe)
+        self.session.commit()
+        self.session.refresh(recipe)
+        return recipe

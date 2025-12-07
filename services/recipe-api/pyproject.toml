@@ -16,7 +16,15 @@ dependencies = [
     "httpx>=0.28.0",
     "python-multipart>=0.0.18",
     "alembic>=1.14.0",
+    "temporalio>=1.7.0",
+    "instructor>=1.4.0",
+    "alembic-postgresql-enum>=1.8.0",
 ]
+
+[project.scripts]
+dev-worker = "recipe_api.commands:dev_worker"
+dev-server = "recipe_api.commands:dev_server"
+
 
 [project.optional-dependencies]
 dev = [
@@ -24,6 +32,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "watchdog>=6.0.0",
 ]
 
 [build-system]
