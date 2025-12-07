@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from recipe_api.features.generate.router import router as generate_router
 from recipe_api.features.recipes.router import router as recipes_router
 from recipe_api.features.search.router import router as search_router
 from recipe_api.features.users.router import router as users_router
@@ -33,6 +34,7 @@ app.add_middleware(
 app.include_router(recipes_router)
 app.include_router(search_router)
 app.include_router(users_router)
+app.include_router(generate_router)
 
 @app.get("/")
 def root() -> dict[str, str]:
