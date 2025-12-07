@@ -1,16 +1,15 @@
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi_limiter.depends import RateLimiter
 
-from recipe_api.features.recipes.schemas import RecipeRead
 from recipe_api.features.search.schemas import (
-    RecipeGenerateRequest,
     SearchRequest,
     SearchResponse,
 )
 from recipe_api.features.search.service import SearchService
 from recipe_api.shared.deps import CurrentUserDep, SessionDep
+from recipe_api.shared.rate_limit import get_rate_limit_key
 from recipe_api.shared.services.embeddings import EmbeddingService, get_embedding_service
 from recipe_api.shared.services.llm import LLMService, get_llm_service
 
@@ -24,7 +23,7 @@ def get_search_service(
     return SearchService(embedding_service, llm_service)
 
 
-@router.post("/", response_model=SearchResponse)
+@router.post("/", response_model=SearchResponse, dependencies=[Depends(RateLimiter(times=10, seconds=60, identifier=get_rate_limit_key))])
 def search_recipes(
     search_request: SearchRequest,
     session: SessionDep,
@@ -45,23 +44,3 @@ def search_recipes(
         total=len(results),
         query=search_request.query,
     )
-
-
-@router.post("/generate", response_model=list[RecipeRead])
-def generate_recipe(
-    generate_request: RecipeGenerateRequest,
-    current_user: CurrentUserDep,
-    session: SessionDep,
-    service: Annotated[SearchService, Depends(get_search_service)],
-) -> list[RecipeRead]:
-
-    recipes = service.generate_recipe(
-        session=session,
-        prompt=generate_request.prompt,
-        user_id=current_user,
-        amount=generate_request.amount,
-        ingredients=generate_request.ingredients,
-        dietary_restrictions=generate_request.dietary_restrictions,
-    )
-
-    return recipes

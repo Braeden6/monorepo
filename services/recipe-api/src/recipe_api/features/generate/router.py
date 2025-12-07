@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_limiter.depends import RateLimiter
 from temporalio.client import Client
 
 from recipe_api.features.generate.schemas import (
@@ -11,6 +12,7 @@ from recipe_api.features.generate.schemas import (
 )
 from recipe_api.features.generate.service import GenerateService
 from recipe_api.shared.deps import CurrentUserDep, SessionDep
+from recipe_api.shared.rate_limit import get_rate_limit_key
 from recipe_api.shared.temporal import get_temporal_client
 
 router = APIRouter(prefix="/generate", tags=["generate"])
@@ -28,6 +30,7 @@ async def get_generate_service(
     response_model=GenerateResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Start recipe generation",
+    dependencies=[Depends(RateLimiter(times=5, hours=1, identifier=get_rate_limit_key))],
 )
 async def start_generation(
     request: GenerateRequest,

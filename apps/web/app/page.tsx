@@ -95,8 +95,7 @@ export default function Page() {
 					transition={{ delay: 1.2, duration: 0.8 }}
 					className="mb-12 max-w-2xl text-lg text-muted-foreground sm:text-xl leading-relaxed"
 				>
-					Crafting robust and scalable digital experiences. Focused on
-					performance, accessibility, and modern UI/UX.
+					Building scalable systems and modern digital experiences.
 				</motion.p>
 
 				<div className="mb-20">

@@ -32,3 +32,5 @@ def dev_worker() -> None:
         print("\nWorker stopped")
     except FileNotFoundError:
         print("Error: 'watchmedo' not found. Make sure 'watchdog' is installed (uv sync --extra dev).")
+
+
