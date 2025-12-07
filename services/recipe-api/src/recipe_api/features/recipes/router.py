@@ -55,10 +55,10 @@ def update_recipe(
     return service.update_recipe(recipe_id, recipe_update, current_user)
 
 
-@router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_recipe(
-    recipe_id: uuid.UUID,
-    current_user: CurrentUserDep,
-    service: Annotated[RecipeService, Depends(get_recipe_service)],
-) -> None:
-    service.delete_recipe(recipe_id, current_user)
+# @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
+# def delete_recipe(
+#     recipe_id: uuid.UUID,
+#     current_user: CurrentUserDep,
+#     service: Annotated[RecipeService, Depends(get_recipe_service)],
+# ) -> None:
+#     service.delete_recipe(recipe_id, current_user)

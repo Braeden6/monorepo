@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql://recipe:recipe@localhost:5432/recipe_db"
+    redis_url: str = "redis://localhost:6380/0"
 
     # Clerk Authentication
     clerk_secret_key: str

@@ -19,11 +19,26 @@ dependencies = [
     "temporalio>=1.7.0",
     "instructor>=1.4.0",
     "alembic-postgresql-enum>=1.8.0",
+    "fastapi-limiter>=0.1.6",
+    "redis>=7.1.0",
 ]
 
 [project.scripts]
-dev-worker = "recipe_api.commands:dev_worker"
-dev-server = "recipe_api.commands:dev_server"
+# uv run dev-server
+dev-server = "recipe_api.commands.run:dev_server"
+# uv run dev-worker
+dev-worker = "recipe_api.commands.run:dev_worker"
+# uv run test <path/specfic/folder>
+# uv run test src/recipe_api/features/health
+test = "recipe_api.commands.test:all_tests"
+# uv run test-e2e <path/specfic/folder>
+test-e2e = "recipe_api.commands.test:e2e_tests"
+# uv run test-unit <path/specfic/folder>
+test-unit = "recipe_api.commands.test:unit_tests"
+# uv run db-generate <message>
+db-generate = "recipe_api.commands.db:generate"
+# uv run db-migrate
+db-migrate = "recipe_api.commands.db:migrate"
 
 
 [project.optional-dependencies]
@@ -33,6 +48,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "watchdog>=6.0.0",
+    "testcontainers[postgres,redis]>=4.13.3",
 ]
 
 [build-system]
@@ -72,5 +88,9 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src"]
 asyncio_mode = "auto"
+pythonpath = ["src"]
+markers = [
+    "e2e: End-to-end tests",
+]
