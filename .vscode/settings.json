@@ -40,7 +40,8 @@
   },
   "python.defaultInterpreterPath": "${workspaceFolder}/services/recipe-api/.venv/bin/python",
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/services/recipe-api/src"
+    "${workspaceFolder}/services/recipe-api/src",
+    "${workspaceFolder}/services/recipe-api/tests/api_client"
   ],
   "[python]": {
     "editor.defaultFormatter": "astral-sh.ruff",

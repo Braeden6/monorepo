@@ -1,19 +1,21 @@
 import pytest
-from fastapi.testclient import TestClient
+
+from recipe_api_client import Client as ApiClient
+from recipe_api_client.api.health import health_health_get, root_get
 
 
 @pytest.mark.e2e
-def test_root(client: TestClient):
-    response = client.get("/")
+def test_root(api_client: ApiClient) -> None:
+    response = root_get.sync_detailed(client=api_client)
     assert response.status_code == 200
-    data = response.json()
-    assert data["message"] == "Recipe API"
-    assert "version" in data
+    assert response.parsed is not None
+    assert response.parsed["message"] == "Recipe API"
+    assert "version" in response.parsed
 
 
 @pytest.mark.e2e
-def test_health(client: TestClient):
-    response = client.get("/health")
+def test_health(api_client: ApiClient) -> None:
+    response = health_health_get.sync_detailed(client=api_client)
     assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "healthy"
+    assert response.parsed is not None
+    assert response.parsed["status"] == "healthy"
