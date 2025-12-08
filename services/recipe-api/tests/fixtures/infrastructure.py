@@ -3,7 +3,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 
-from recipe_api.shared.config import settings
+from recipe_api.shared.config import Settings, settings
 
 
 @pytest.fixture(scope="session", name="postgres_container")
@@ -32,7 +32,7 @@ def test_settings_fixture(postgres_container, redis_container):
     settings.redis_url = original_redis_url
 
 @pytest.fixture(scope="session", name="engine")
-def engine_fixture(test_settings):
+def engine_fixture(test_settings: Settings):
     engine = create_engine(test_settings.database_url)
 
     from sqlalchemy import text

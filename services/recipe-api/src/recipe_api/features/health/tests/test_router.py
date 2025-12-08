@@ -5,8 +5,8 @@ from recipe_api_client.api.health import health_health_get, root_get
 
 
 @pytest.mark.e2e
-def test_root(api_client: ApiClient) -> None:
-    response = root_get.sync_detailed(client=api_client)
+def test_root(user1_client: ApiClient) -> None:
+    response = root_get.sync_detailed(client=user1_client)
     assert response.status_code == 200
     assert response.parsed is not None
     assert response.parsed["message"] == "Recipe API"
@@ -14,8 +14,8 @@ def test_root(api_client: ApiClient) -> None:
 
 
 @pytest.mark.e2e
-def test_health(api_client: ApiClient) -> None:
-    response = health_health_get.sync_detailed(client=api_client)
+def test_health(user1_client: ApiClient) -> None:
+    response = health_health_get.sync_detailed(client=user1_client)
     assert response.status_code == 200
     assert response.parsed is not None
     assert response.parsed["status"] == "healthy"

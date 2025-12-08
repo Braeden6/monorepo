@@ -47,7 +47,8 @@ class Settings(BaseSettings):
     llm_retry_max_attempts: int = 3
     llm_retry_max_interval_seconds: int = 30
 
-    test_token: str = ""
+    test_token_1: str = ""
+    test_token_2: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:
