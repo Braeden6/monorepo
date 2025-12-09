@@ -26,7 +26,10 @@ def client_fixture():
 def api_client_user1_fixture(client: TestClient, test_settings: Settings):
     return AuthenticatedTestClient(client, test_settings.test_token_1)
 
-
 @pytest.fixture(name="user2_client")
 def api_client_user2_fixture(client: TestClient, test_settings: Settings):
     return AuthenticatedTestClient(client, test_settings.test_token_2)
+
+@pytest.fixture(name="no_user_client")
+def api_client_no_user_fixture(client: TestClient):
+    return AuthenticatedTestClient(client, "")

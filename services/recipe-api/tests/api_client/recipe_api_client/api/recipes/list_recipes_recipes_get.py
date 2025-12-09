@@ -69,7 +69,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     skip: int | Unset = 0,
     limit: int | Unset = 20,
 ) -> Response[HTTPValidationError | list[RecipeRead]]:
@@ -101,7 +101,7 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     skip: int | Unset = 0,
     limit: int | Unset = 20,
 ) -> HTTPValidationError | list[RecipeRead] | None:
@@ -128,7 +128,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     skip: int | Unset = 0,
     limit: int | Unset = 20,
 ) -> Response[HTTPValidationError | list[RecipeRead]]:
@@ -158,7 +158,7 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
     skip: int | Unset = 0,
     limit: int | Unset = 20,
 ) -> HTTPValidationError | list[RecipeRead] | None:
