@@ -13,6 +13,7 @@ from recipe_api.shared.db import get_session
 clerk_client = Clerk(bearer_auth=settings.clerk_secret_key)
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def get_current_user_id(
@@ -37,5 +38,23 @@ def get_current_user_id(
             detail=f"Authentication failed: {str(e)}",
         ) from e
 
+
+def get_optional_user_id(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(optional_security)],
+) -> str | None:
+    if credentials is None:
+        return None
+
+    token = credentials.credentials
+    try:
+        verified_token = verify_token(
+            token, VerifyTokenOptions(secret_key=settings.clerk_secret_key)
+        )
+        return verified_token.get("sub")
+    except Exception:
+        return None
+
+
 SessionDep = Annotated[Session, Depends(get_session)]
 CurrentUserDep = Annotated[str, Depends(get_current_user_id)]
+OptionalUserDep = Annotated[str | None, Depends(get_optional_user_id)]

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, status
 
 from recipe_api.features.recipes.schemas import RecipeCreate, RecipeRead, RecipeUpdate
 from recipe_api.features.recipes.service import RecipeService
-from recipe_api.shared.deps import CurrentUserDep, SessionDep
+from recipe_api.shared.deps import CurrentUserDep, OptionalUserDep, SessionDep
 from recipe_api.shared.models.recipe import Recipe
 from recipe_api.shared.services.embeddings import EmbeddingService, get_embedding_service
 
@@ -32,17 +32,19 @@ def create_recipe(
 def get_recipe(
     recipe_id: uuid.UUID,
     service: Annotated[RecipeService, Depends(get_recipe_service)],
+    current_user: OptionalUserDep,
 ) -> Recipe:
-    return service.get_recipe(recipe_id)
+    return service.get_recipe(recipe_id, current_user)
 
 
 @router.get("/", response_model=list[RecipeRead])
 def list_recipes(
     service: Annotated[RecipeService, Depends(get_recipe_service)],
+    current_user: OptionalUserDep,
     skip: int = 0,
     limit: int = 20,
 ) -> list[Recipe]:
-    return service.list_recipes(skip, limit)
+    return service.list_recipes(skip, limit, current_user)
 
 
 @router.patch("/{recipe_id}", response_model=RecipeRead)

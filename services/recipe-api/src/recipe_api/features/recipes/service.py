@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from recipe_api.features.recipes.schemas import RecipeCreate, RecipeUpdate
@@ -31,7 +32,7 @@ class RecipeService:
             ingredients=[ing.model_dump() for ing in recipe_create.ingredients],
             instructions=recipe_create.instructions,
             food_type=recipe_create.food_type,
-            status=RecipeStatus.PUBLISHED,
+            status=recipe_create.status,
             is_generated=False,
             created_by=user_id,
             description_embedding=description_embedding,
@@ -44,23 +45,47 @@ class RecipeService:
 
         return db_recipe
 
-    def get_recipe(self, recipe_id: uuid.UUID) -> Recipe:
+    def get_recipe(self, recipe_id: uuid.UUID, user_id: str | None = None) -> Recipe:
         recipe = self.session.get(Recipe, recipe_id)
         if not recipe:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Recipe not found",
             )
+
+        is_draft = recipe.status == RecipeStatus.DRAFT
+        is_not_owner = user_id is None or recipe.created_by != user_id
+        if is_draft and is_not_owner:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Recipe not found",
+            )
+
         return recipe
 
-    def list_recipes(self, skip: int = 0, limit: int = 20) -> list[Recipe]:
-        recipes = self.session.exec(select(Recipe).offset(skip).limit(limit)).all()
+    def list_recipes(
+        self, skip: int = 0, limit: int = 20, user_id: str | None = None
+    ) -> list[Recipe]:
+        visibility_filter = Recipe.status == RecipeStatus.PUBLISHED
+        if user_id is not None:
+            visibility_filter = or_(
+                Recipe.status == RecipeStatus.PUBLISHED,  # type: ignore[arg-type]
+                Recipe.created_by == user_id,  # type: ignore[arg-type]
+            )
+
+        recipes = self.session.exec(
+            select(Recipe)
+            .where(visibility_filter)
+            .order_by(Recipe.created_at.desc())  # type: ignore[union-attr]
+            .offset(skip)
+            .limit(limit)
+        ).all()
         return list(recipes)
 
     def update_recipe(
         self, recipe_id: uuid.UUID, recipe_update: RecipeUpdate, user_id: str
     ) -> Recipe:
-        recipe = self.get_recipe(recipe_id)
+        recipe = self.get_recipe(recipe_id, user_id)
 
         if recipe.created_by != user_id:
             raise HTTPException(
@@ -98,9 +123,6 @@ class RecipeService:
         self.session.refresh(recipe)
 
         return recipe
-
-        self.session.delete(recipe)
-        self.session.commit()
 
     def create_placeholder(
         self,

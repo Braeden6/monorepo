@@ -7,6 +7,7 @@ from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..models.food_type import FoodType
+from ..models.recipe_status import RecipeStatus
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -25,6 +26,7 @@ class RecipeCreate:
         ingredients (list[IngredientItem]):
         instructions (str):
         food_type (FoodType | None | Unset):
+        status (RecipeStatus | Unset):
     """
 
     name: str
@@ -32,6 +34,7 @@ class RecipeCreate:
     ingredients: list[IngredientItem]
     instructions: str
     food_type: FoodType | None | Unset = UNSET
+    status: RecipeStatus | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -54,6 +57,10 @@ class RecipeCreate:
         else:
             food_type = self.food_type
 
+        status: str | Unset = UNSET
+        if not isinstance(self.status, Unset):
+            status = self.status.value
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -66,6 +73,8 @@ class RecipeCreate:
         )
         if food_type is not UNSET:
             field_dict["food_type"] = food_type
+        if status is not UNSET:
+            field_dict["status"] = status
 
         return field_dict
 
@@ -104,12 +113,20 @@ class RecipeCreate:
 
         food_type = _parse_food_type(d.pop("food_type", UNSET))
 
+        _status = d.pop("status", UNSET)
+        status: RecipeStatus | Unset
+        if isinstance(_status, Unset):
+            status = UNSET
+        else:
+            status = RecipeStatus(_status)
+
         recipe_create = cls(
             name=name,
             description=description,
             ingredients=ingredients,
             instructions=instructions,
             food_type=food_type,
+            status=status,
         )
 
         recipe_create.additional_properties = d
