@@ -8,7 +8,10 @@ from recipe_api_client.models.recipe_status import RecipeStatus
 
 
 def create_test_recipe(
-    client: AuthenticatedClient, title: str = "Test Recipe", description: str = "Test Description"
+    client: AuthenticatedClient,
+    title: str = "Test Recipe",
+    description: str = "Test Description",
+    food_type: FoodType = FoodType.DINNER,
 ) -> RecipeRead:
     recipe_data = RecipeCreate(
         name=title,
@@ -18,7 +21,7 @@ def create_test_recipe(
             IngredientItem(name="Ingredient 2", amount="2", unit="cups"),
         ],
         instructions="Mix everything together.",
-        food_type=FoodType.DINNER,
+        food_type=food_type,
         status=RecipeStatus.DRAFT,
     )
 
@@ -26,3 +29,4 @@ def create_test_recipe(
     assert response.status_code == 201
     assert isinstance(response.parsed, RecipeRead)
     return response.parsed
+

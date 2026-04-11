@@ -8,7 +8,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-	title: "Braeden's Auth App",
+	title: "Braeden's Authentication",
 	description: "Authentication for Braeden6 apps",
 	icons: {
 		icon: [{ url: "/icon.svg", type: "image/svg+xml" }],

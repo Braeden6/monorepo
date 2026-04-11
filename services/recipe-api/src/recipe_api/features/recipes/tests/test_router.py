@@ -13,6 +13,7 @@ from recipe_api_client.api.recipes import (
 from recipe_api_client.models.food_type import FoodType
 from recipe_api_client.models.ingredient_item import IngredientItem
 from recipe_api_client.models.recipe_create import RecipeCreate
+from recipe_api_client.models.recipe_query_response import RecipeQueryResponse
 from recipe_api_client.models.recipe_read import RecipeRead
 from recipe_api_client.models.recipe_status import RecipeStatus
 from recipe_api_client.models.recipe_update import RecipeUpdate
@@ -94,10 +95,11 @@ def test_list_recipes_without_auth_shows_only_published(
 
     response = list_recipes_recipes_get.sync_detailed(client=no_user_client)
     assert response.status_code == 200
-    recipes = response.parsed
-    assert isinstance(recipes, list)
+    assert isinstance(response.parsed, RecipeQueryResponse)
+    recipes = response.parsed.results
     assert any(r.id == published_recipe.id for r in recipes)
     assert not any(r.id == draft_recipe.id for r in recipes)
+
 
 
 # =============================================================================
@@ -167,16 +169,18 @@ def test_list_recipes_pagination(user1_client: AuthenticatedClient) -> None:
         )
         recipes_created.append(recipe)
 
-    response = list_recipes_recipes_get.sync_detailed(client=user1_client, skip=0, limit=2)
+    response = list_recipes_recipes_get.sync_detailed(client=user1_client, limit=2)
     assert response.status_code == 200
-    recipes = response.parsed
-    assert isinstance(recipes, list)
-    assert len(recipes) <= 2
+    assert isinstance(response.parsed, RecipeQueryResponse)
+    assert len(response.parsed.results) <= 2
+    assert response.parsed.pagination.has_next is True
 
-    response = list_recipes_recipes_get.sync_detailed(client=user1_client, skip=2, limit=2)
+    cursor = response.parsed.pagination.next_cursor
+    response = list_recipes_recipes_get.sync_detailed(client=user1_client, cursor=cursor, limit=2)
     assert response.status_code == 200
-    recipes = response.parsed
-    assert isinstance(recipes, list)
+    assert isinstance(response.parsed, RecipeQueryResponse)
+    assert len(response.parsed.results) >= 1
+
 
 
 # =============================================================================
@@ -236,9 +240,10 @@ def test_owner_can_see_own_draft_recipe(user1_client: AuthenticatedClient) -> No
 
     response = list_recipes_recipes_get.sync_detailed(client=user1_client)
     assert response.status_code == 200
-    recipes = response.parsed
-    assert isinstance(recipes, list)
+    assert isinstance(response.parsed, RecipeQueryResponse)
+    recipes = response.parsed.results
     assert any(r.id == recipe.id for r in recipes)
+
 
     response = get_recipe_recipes_recipe_id_get.sync_detailed(client=user1_client, recipe_id=recipe.id)
     assert response.status_code == 200
@@ -255,9 +260,10 @@ def test_other_user_cannot_see_draft_recipe(
 
     response = list_recipes_recipes_get.sync_detailed(client=user2_client)
     assert response.status_code == 200
-    recipes = response.parsed
-    assert isinstance(recipes, list)
+    assert isinstance(response.parsed, RecipeQueryResponse)
+    recipes = response.parsed.results
     assert not any(r.id == recipe.id for r in recipes)
+
 
     response = get_recipe_recipes_recipe_id_get.sync_detailed(client=user2_client, recipe_id=recipe.id)
     assert response.status_code == 404
@@ -288,9 +294,10 @@ def test_published_recipe_visible_to_all(
 
     response = list_recipes_recipes_get.sync_detailed(client=user2_client)
     assert response.status_code == 200
-    recipes = response.parsed
-    assert isinstance(recipes, list)
+    assert isinstance(response.parsed, RecipeQueryResponse)
+    recipes = response.parsed.results
     assert any(r.id == recipe.id for r in recipes)
+
 
     response = get_recipe_recipes_recipe_id_get.sync_detailed(client=user2_client, recipe_id=recipe.id)
     assert response.status_code == 200

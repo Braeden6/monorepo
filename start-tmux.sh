@@ -9,8 +9,11 @@ tmux new-session -d -s personal -n api -c $API_ROOT
 
 # Window 1: api 
 tmux split-window -h -t personal:1 -c $API_ROOT
+tmux split-window -v -t personal:1.1 -c $API_ROOT
 
-tmux send-keys -t personal:1.0 'uv run src/recipe_api/main.py' C-m
+tmux send-keys -t personal:1.0 'uv run dev-server' C-m
+
+tmux send-keys -t personal:1.1 'uv run dev-worker' C-m
 
 # Window 2: frontend
 tmux new-window -t personal:2 -n frontend -c $MONOREPO_ROOT

@@ -1,7 +1,7 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
-export const env = createEnv({
+export const envConfig = {
 	server: {
 		CLERK_SECRET_KEY: z.string().min(1).default("build-time-placeholder"),
 	},
@@ -10,6 +10,7 @@ export const env = createEnv({
 		NEXT_PUBLIC_UMAMI_WEBSITE_ID: z.string().min(1),
 		NEXT_PUBLIC_DOMAIN: z.string().min(1),
 		NEXT_PUBLIC_REDIRECT_URL: z.string().min(1),
+		NEXT_PUBLIC_AUTH_URL: z.string().url(),
 	},
 	runtimeEnv: {
 		CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
@@ -18,5 +19,8 @@ export const env = createEnv({
 		NEXT_PUBLIC_UMAMI_WEBSITE_ID: process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID,
 		NEXT_PUBLIC_DOMAIN: process.env.NEXT_PUBLIC_DOMAIN,
 		NEXT_PUBLIC_REDIRECT_URL: process.env.NEXT_PUBLIC_REDIRECT_URL,
+		NEXT_PUBLIC_AUTH_URL: process.env.NEXT_PUBLIC_AUTH_URL,
 	},
-});
+};
+
+export const env = createEnv(envConfig);

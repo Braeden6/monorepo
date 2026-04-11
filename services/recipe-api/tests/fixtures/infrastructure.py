@@ -1,9 +1,11 @@
 import pytest
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 
 from recipe_api.shared.config import Settings, settings
+from recipe_api.shared.models import GenerationLog, Recipe, UserRecipeInteraction  # noqa: F401
 
 
 @pytest.fixture(scope="session", name="postgres_container")
@@ -35,7 +37,6 @@ def test_settings_fixture(postgres_container, redis_container):
 def engine_fixture(test_settings: Settings):
     engine = create_engine(test_settings.database_url)
 
-    from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 

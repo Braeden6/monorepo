@@ -1,18 +1,25 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_
 from sqlmodel import Session, select
 
-from recipe_api.features.recipes.schemas import RecipeCreate, RecipeUpdate
+from recipe_api.features.recipes.generation import RecipeGenerationHandler
+from recipe_api.features.recipes.query import RecipeQueryHandler
+from recipe_api.features.recipes.schemas import (
+    RecipeCreate,
+    RecipeQueryRequest,
+    RecipeQueryResponse,
+    RecipeRead,
+    RecipeUpdate,
+)
 from recipe_api.shared.models.recipe import (
-    FoodType,
     GenerationStatus,
     GenerationStep,
     Recipe,
     RecipeStatus,
 )
+from recipe_api.shared.models.user_interaction import UserRecipeInteraction
 from recipe_api.shared.services.embeddings import EmbeddingService
 
 
@@ -20,6 +27,8 @@ class RecipeService:
     def __init__(self, session: Session, embedding_service: EmbeddingService):
         self.session = session
         self.embedding_service = embedding_service
+        self.query = RecipeQueryHandler(session, embedding_service)
+        self.generation = RecipeGenerationHandler(session, embedding_service)
 
     def create_recipe(self, recipe_create: RecipeCreate, user_id: str) -> Recipe:
         description_embedding = self.embedding_service.encode(recipe_create.description)
@@ -45,13 +54,21 @@ class RecipeService:
 
         return db_recipe
 
-    def get_recipe(self, recipe_id: uuid.UUID, user_id: str | None = None) -> Recipe:
+    def get_recipe(
+        self,
+        recipe_id: uuid.UUID,
+        user_id: str | None = None,
+        check_visibility: bool = True,
+    ) -> Recipe:
         recipe = self.session.get(Recipe, recipe_id)
         if not recipe:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Recipe not found",
             )
+
+        if not check_visibility:
+            return recipe
 
         is_draft = recipe.status == RecipeStatus.DRAFT
         is_not_owner = user_id is None or recipe.created_by != user_id
@@ -63,28 +80,38 @@ class RecipeService:
 
         return recipe
 
-    def list_recipes(
-        self, skip: int = 0, limit: int = 20, user_id: str | None = None
-    ) -> list[Recipe]:
-        visibility_filter = Recipe.status == RecipeStatus.PUBLISHED
-        if user_id is not None:
-            visibility_filter = or_(
-                Recipe.status == RecipeStatus.PUBLISHED,  # type: ignore[arg-type]
-                Recipe.created_by == user_id,  # type: ignore[arg-type]
-            )
+    def get_recipe_read(
+        self,
+        recipe_id: uuid.UUID,
+        user_id: str | None = None,
+    ) -> RecipeRead:
+        recipe = self.get_recipe(recipe_id, user_id)
+        recipe_read = RecipeRead.model_validate(recipe)
 
-        recipes = self.session.exec(
-            select(Recipe)
-            .where(visibility_filter)
-            .order_by(Recipe.created_at.desc())  # type: ignore[union-attr]
-            .offset(skip)
-            .limit(limit)
-        ).all()
-        return list(recipes)
+        if user_id:
+            interaction = self.session.exec(
+                select(UserRecipeInteraction).where(
+                    UserRecipeInteraction.user_id == user_id,
+                    UserRecipeInteraction.recipe_id == recipe_id,
+                )
+            ).first()
+            if interaction:
+                recipe_read.is_liked = interaction.is_liked
+                recipe_read.is_favorited = interaction.is_favorite
+
+        return recipe_read
+
+    def query_recipes(
+        self,
+        request: RecipeQueryRequest,
+        user_id: str | None = None,
+    ) -> RecipeQueryResponse:
+        """Proxies query requests to the query handler."""
+        return self.query.query_recipes(request, user_id)
 
     def update_recipe(
         self, recipe_id: uuid.UUID, recipe_update: RecipeUpdate, user_id: str
-    ) -> Recipe:
+    ) -> RecipeRead:
         recipe = self.get_recipe(recipe_id, user_id)
 
         if recipe.created_by != user_id:
@@ -116,13 +143,38 @@ class RecipeService:
                 ingredient_text = " ".join([ing.get("name", "") for ing in recipe.ingredients])
                 recipe.ingredient_embedding = self.embedding_service.encode(ingredient_text)
 
-        recipe.updated_at = datetime.utcnow()
+        recipe.updated_at = datetime.now(UTC)
 
         self.session.add(recipe)
         self.session.commit()
-        self.session.refresh(recipe)
 
-        return recipe
+        return self.get_recipe_read(recipe.id, user_id)
+
+    def delete_recipe(self, recipe_id: uuid.UUID, user_id: str) -> None:
+        recipe = self.get_recipe(recipe_id, user_id)
+
+        if recipe.created_by != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete your own recipes",
+            )
+
+        from recipe_api.shared.models.generation_log import GenerationLog
+
+        logs = self.session.exec(
+            select(GenerationLog).where(GenerationLog.recipe_id == recipe_id)
+        ).all()
+        for log in logs:
+            self.session.delete(log)
+
+        interactions = self.session.exec(
+            select(UserRecipeInteraction).where(UserRecipeInteraction.recipe_id == recipe_id)
+        ).all()
+        for interaction in interactions:
+            self.session.delete(interaction)
+
+        self.session.delete(recipe)
+        self.session.commit()
 
     def create_placeholder(
         self,
@@ -130,19 +182,7 @@ class RecipeService:
         workflow_id: str,
         prompt: str,
     ) -> Recipe:
-        recipe = Recipe(
-            id=uuid.uuid4(),
-            created_by=user_id,
-            is_generated=True,
-            workflow_id=workflow_id,
-            generation_step=GenerationStep.QUEUED,
-            generation_status=GenerationStatus.PENDING,
-            generation_prompt=prompt,
-        )
-        self.session.add(recipe)
-        self.session.commit()
-        self.session.refresh(recipe)
-        return recipe
+        return self.generation.create_placeholder(user_id, workflow_id, prompt)
 
     def update_generation_status(
         self,
@@ -151,16 +191,8 @@ class RecipeService:
         status: GenerationStatus | None = None,
         error: str | None = None,
     ) -> None:
-        recipe = self.get_recipe(recipe_id)
-        if step:
-            recipe.generation_step = step
-        if status:
-            recipe.generation_status = status
-        if error:
-            recipe.generation_error = error
-        recipe.updated_at = datetime.utcnow()
-        self.session.add(recipe)
-        self.session.commit()
+        recipe = self.get_recipe(recipe_id, check_visibility=False)
+        self.generation.update_status(recipe, step, status, error)
 
     def finalize_generated_recipe(
         self,
@@ -171,35 +203,7 @@ class RecipeService:
         instructions: str | list[str],
         food_type_str: str | None,
     ) -> Recipe:
-        recipe = self.get_recipe(recipe_id)
-
-        food_type = None
-        if food_type_str:
-            import contextlib
-
-            with contextlib.suppress(ValueError):
-                food_type = FoodType(food_type_str)
-
-        if isinstance(instructions, list):
-            instructions = "\n".join(instructions)
-
-        description_embedding = self.embedding_service.encode(description)
-        ingredient_text = " ".join([ing.get("name", "") for ing in ingredients])
-        ingredient_embedding = self.embedding_service.encode(ingredient_text)
-
-        recipe.name = name
-        recipe.description = description
-        recipe.ingredients = ingredients
-        recipe.instructions = instructions
-        recipe.food_type = food_type
-        recipe.description_embedding = description_embedding
-        recipe.ingredient_embedding = ingredient_embedding
-
-        recipe.generation_step = GenerationStep.COMPLETED
-        recipe.generation_status = GenerationStatus.COMPLETED
-        recipe.updated_at = datetime.utcnow()
-
-        self.session.add(recipe)
-        self.session.commit()
-        self.session.refresh(recipe)
-        return recipe
+        recipe = self.get_recipe(recipe_id, check_visibility=False)
+        return self.generation.finalize_recipe(
+            recipe, name, description, ingredients, instructions, food_type_str
+        )

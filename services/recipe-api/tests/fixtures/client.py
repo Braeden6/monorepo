@@ -18,7 +18,7 @@ class AuthenticatedTestClient(AuthenticatedClient):
 
 
 @pytest.fixture(name="client")
-def client_fixture():
+def client_fixture(engine):
     with TestClient(app) as c:
         yield c
 

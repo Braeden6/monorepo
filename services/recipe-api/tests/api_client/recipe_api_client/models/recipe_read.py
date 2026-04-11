@@ -39,6 +39,7 @@ class RecipeRead:
         food_type (FoodType | None | Unset):
         is_liked (bool | Unset):  Default: False.
         is_favorited (bool | Unset):  Default: False.
+        similarity_score (float | None | Unset):
     """
 
     name: str
@@ -56,6 +57,7 @@ class RecipeRead:
     food_type: FoodType | None | Unset = UNSET
     is_liked: bool | Unset = False
     is_favorited: bool | Unset = False
+    similarity_score: float | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -98,6 +100,12 @@ class RecipeRead:
 
         is_favorited = self.is_favorited
 
+        similarity_score: float | None | Unset
+        if isinstance(self.similarity_score, Unset):
+            similarity_score = UNSET
+        else:
+            similarity_score = self.similarity_score
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -122,6 +130,8 @@ class RecipeRead:
             field_dict["is_liked"] = is_liked
         if is_favorited is not UNSET:
             field_dict["is_favorited"] = is_favorited
+        if similarity_score is not UNSET:
+            field_dict["similarity_score"] = similarity_score
 
         return field_dict
 
@@ -180,6 +190,15 @@ class RecipeRead:
 
         is_favorited = d.pop("is_favorited", UNSET)
 
+        def _parse_similarity_score(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        similarity_score = _parse_similarity_score(d.pop("similarity_score", UNSET))
+
         recipe_read = cls(
             name=name,
             description=description,
@@ -196,6 +215,7 @@ class RecipeRead:
             food_type=food_type,
             is_liked=is_liked,
             is_favorited=is_favorited,
+            similarity_score=similarity_score,
         )
 
         recipe_read.additional_properties = d

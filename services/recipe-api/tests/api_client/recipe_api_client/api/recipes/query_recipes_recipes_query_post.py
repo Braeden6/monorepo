@@ -6,33 +6,20 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...models.search_request import SearchRequest
-from ...models.search_response import SearchResponse
-from ...types import UNSET, Response, Unset
+from ...models.recipe_query_request import RecipeQueryRequest
+from ...models.recipe_query_response import RecipeQueryResponse
+from ...types import Response
 
 
 def _get_kwargs(
     *,
-    body: SearchRequest,
-    current_user: None | str | Unset = UNSET,
+    body: RecipeQueryRequest,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
-    params: dict[str, Any] = {}
-
-    json_current_user: None | str | Unset
-    if isinstance(current_user, Unset):
-        json_current_user = UNSET
-    else:
-        json_current_user = current_user
-    params["current_user"] = json_current_user
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/search/",
-        "params": params,
+        "url": "/recipes/query",
     }
 
     _kwargs["json"] = body.to_dict()
@@ -45,9 +32,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> HTTPValidationError | SearchResponse | None:
+) -> HTTPValidationError | RecipeQueryResponse | None:
     if response.status_code == 200:
-        response_200 = SearchResponse.from_dict(response.json())
+        response_200 = RecipeQueryResponse.from_dict(response.json())
 
         return response_200
 
@@ -64,7 +51,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[HTTPValidationError | SearchResponse]:
+) -> Response[HTTPValidationError | RecipeQueryResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -75,27 +62,26 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
-    body: SearchRequest,
-    current_user: None | str | Unset = UNSET,
-) -> Response[HTTPValidationError | SearchResponse]:
-    """Search Recipes
+    client: AuthenticatedClient,
+    body: RecipeQueryRequest,
+) -> Response[HTTPValidationError | RecipeQueryResponse]:
+    """Query Recipes
+
+     Unified endpoint for searching and filtering recipes.
 
     Args:
-        current_user (None | str | Unset):
-        body (SearchRequest):
+        body (RecipeQueryRequest): Unified query request for searching and filtering recipes.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | SearchResponse]
+        Response[HTTPValidationError | RecipeQueryResponse]
     """
 
     kwargs = _get_kwargs(
         body=body,
-        current_user=current_user,
     )
 
     response = client.get_httpx_client().request(
@@ -107,54 +93,52 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
-    body: SearchRequest,
-    current_user: None | str | Unset = UNSET,
-) -> HTTPValidationError | SearchResponse | None:
-    """Search Recipes
+    client: AuthenticatedClient,
+    body: RecipeQueryRequest,
+) -> HTTPValidationError | RecipeQueryResponse | None:
+    """Query Recipes
+
+     Unified endpoint for searching and filtering recipes.
 
     Args:
-        current_user (None | str | Unset):
-        body (SearchRequest):
+        body (RecipeQueryRequest): Unified query request for searching and filtering recipes.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | SearchResponse
+        HTTPValidationError | RecipeQueryResponse
     """
 
     return sync_detailed(
         client=client,
         body=body,
-        current_user=current_user,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
-    body: SearchRequest,
-    current_user: None | str | Unset = UNSET,
-) -> Response[HTTPValidationError | SearchResponse]:
-    """Search Recipes
+    client: AuthenticatedClient,
+    body: RecipeQueryRequest,
+) -> Response[HTTPValidationError | RecipeQueryResponse]:
+    """Query Recipes
+
+     Unified endpoint for searching and filtering recipes.
 
     Args:
-        current_user (None | str | Unset):
-        body (SearchRequest):
+        body (RecipeQueryRequest): Unified query request for searching and filtering recipes.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | SearchResponse]
+        Response[HTTPValidationError | RecipeQueryResponse]
     """
 
     kwargs = _get_kwargs(
         body=body,
-        current_user=current_user,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -164,28 +148,27 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
-    body: SearchRequest,
-    current_user: None | str | Unset = UNSET,
-) -> HTTPValidationError | SearchResponse | None:
-    """Search Recipes
+    client: AuthenticatedClient,
+    body: RecipeQueryRequest,
+) -> HTTPValidationError | RecipeQueryResponse | None:
+    """Query Recipes
+
+     Unified endpoint for searching and filtering recipes.
 
     Args:
-        current_user (None | str | Unset):
-        body (SearchRequest):
+        body (RecipeQueryRequest): Unified query request for searching and filtering recipes.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | SearchResponse
+        HTTPValidationError | RecipeQueryResponse
     """
 
     return (
         await asyncio_detailed(
             client=client,
             body=body,
-            current_user=current_user,
         )
     ).parsed

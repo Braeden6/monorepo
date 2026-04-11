@@ -6,54 +6,28 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-T = TypeVar("T", bound="SearchRequest")
+T = TypeVar("T", bound="RecipeQueryResponseFiltersApplied")
 
 
 @_attrs_define
-class SearchRequest:
-    """
-    Attributes:
-        query (str):
-        limit (int | Unset):  Default: 10.
-    """
+class RecipeQueryResponseFiltersApplied:
+    """Summary of filters that were applied"""
 
-    query: str
-    limit: int | Unset = 10
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        query = self.query
-
-        limit = self.limit
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "query": query,
-            }
-        )
-        if limit is not UNSET:
-            field_dict["limit"] = limit
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        query = d.pop("query")
+        recipe_query_response_filters_applied = cls()
 
-        limit = d.pop("limit", UNSET)
-
-        search_request = cls(
-            query=query,
-            limit=limit,
-        )
-
-        search_request.additional_properties = d
-        return search_request
+        recipe_query_response_filters_applied.additional_properties = d
+        return recipe_query_response_filters_applied
 
     @property
     def additional_keys(self) -> list[str]:

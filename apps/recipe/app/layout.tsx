@@ -4,12 +4,13 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 
+import { Header } from "@/components/header";
 import { Providers } from "@/components/providers";
 import "@workspace/ui/globals.css";
 
 export const metadata: Metadata = {
-	title: "Braeden's Personal Profile",
-	description: "Personal web application",
+	title: "Recipe Generator",
+	description: "Generate and share recipes using AI",
 	icons: {
 		icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
 		apple: [{ url: "/logo.svg", type: "image/svg+xml" }],
@@ -39,7 +40,10 @@ export default function RootLayout({
 				<body
 					className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased bg-background text-foreground`}
 				>
-					<Providers>{children}</Providers>
+					<Providers>
+						<Header />
+						{children}
+					</Providers>
 					<Script
 						src="https://umami.braeden6.com/script.js"
 						data-website-id={env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}

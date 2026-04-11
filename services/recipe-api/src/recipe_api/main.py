@@ -10,7 +10,6 @@ from redis import asyncio as aioredis
 from recipe_api.features.generate.router import router as generate_router
 from recipe_api.features.health.router import router as health_router
 from recipe_api.features.recipes.router import router as recipes_router
-from recipe_api.features.search.router import router as search_router
 from recipe_api.features.users.router import router as users_router
 from recipe_api.shared.config import settings
 from recipe_api.shared.rate_limit import get_rate_limit_key
@@ -41,8 +40,8 @@ app.add_middleware(
 )
 
 app.include_router(recipes_router)
-app.include_router(search_router)
 app.include_router(users_router)
+
 app.include_router(generate_router)
 app.include_router(health_router)
 
