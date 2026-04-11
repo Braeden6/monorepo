@@ -64,7 +64,7 @@
 		"@types/react": "^19.2.7",
 		"@types/react-dom": "^19.2.3",
 		"@workspace/typescript-config": "workspace:*",
-		"next": "^16.0.8",
+		"next": "^16.0.11",
 		"tailwindcss": "^4.1.17",
 		"typescript": "^5.9.3"
 	},
