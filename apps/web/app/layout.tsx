@@ -1,4 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { env } from "@workspace/ui/env";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -45,6 +47,8 @@ export default function RootLayout({
 						data-website-id={env.NEXT_PUBLIC_UMAMI_WEBSITE_ID}
 						strategy="afterInteractive"
 					/>
+					<Analytics />
+					<SpeedInsights />
 				</body>
 			</html>
 		</ClerkProvider>
