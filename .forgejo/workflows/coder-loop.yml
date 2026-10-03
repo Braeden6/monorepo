@@ -15,16 +15,24 @@ name: coder-loop
 # runs in any repo listed in api/config/code_repos.yaml. homelab-meta's copy is canonical; to
 # enable another repo, commit an identical copy at .forgejo/workflows/coder-loop.yml there (the
 # `host` runner is registered for the whole braeden6 account; no secrets live in Forgejo).
+# A copy, not a reusable-workflow call: Forgejo only lets another repo call a workflow in a PUBLIC
+# repo, and homelab-meta is private (tested on Forgejo 15.0.2: "failed to access repo
+# homelab-meta: repo does not exist"). So every run compares its own file's blob sha with
+# homelab-meta develop's and warns on the issue when they differ.
 #
 # Model: an issue label `model:<id>` (e.g. `model:gpt-6.1-sol`) asks b6 for that model; b6 checks
 # it against the repo's allowed_models (code_repos.yaml) and refuses the job otherwise. No label =
 # the repo's default_model. Continue/retry rounds keep the job's model. Create model labels by hand.
 #
-# Vercel (GH_MIRROR set: the repo is push-mirrored to that public GitHub repo and Vercel deploys
-# it, today only braeden6/monorepo): there is no Forgejo CI, so "CI" is Vercel's preview build of
-# the PR head, read from GitHub's public deployments API (no token; 60 requests/hour per IP, so
-# the wait backs off and sleeps through a rate limit). On success the preview URL is posted on the
-# PR, once per head sha.
+# CI: one rule for every repo. The verdict is the Forgejo commit status CI_CONTEXT
+# (`CI / fast (pull_request)`, the aggregating job each repo's .forgejo/workflows/ci.yml defines
+# and its develop branch protection requires) on the PR head. CD stays per repo and is never the
+# loop's business. Preview (optional, never the verdict): when GH_MIRROR is set (the repo is
+# push-mirrored to that GitHub repo, today only braeden6/monorepo) and GitHub has a successful
+# deployment for the head sha (Vercel), its URL is posted on the PR once per sha.
+#
+# The PR can be merged or closed while the loop is still waiting. The CI wait notices: merged
+# closes the issue (if Forgejo did not) and drops coder:working; closed hands it to a human.
 #
 # Labels (create once; the init step creates any that are missing):
 #   coder              the trigger. Add it to an issue (or run workflow_dispatch with the number).
@@ -94,6 +102,7 @@ jobs:
     env:
       REPO: ${{ github.repository }}
       GH_MIRROR: ${{ github.repository == 'braeden6/monorepo' && 'Braeden6/monorepo' || '' }}
+      CI_CONTEXT: 'CI / fast (pull_request)'
       FORGEJO: https://git.home.braeden6.com
       B6: http://10.0.1.1:8097
       RUN_ID: ${{ github.run_number }}
@@ -178,63 +187,62 @@ jobs:
           # the job reached a usable PR: open/merged, a PR url, and no unfinished WIP
           job_ok(){ jq -e '(.state == "pr_open" or .state == "merged") and (.pr_url != null) and (.result.wip_reason == null)' <<<"$JV" >/dev/null; }
 
-          # GitHub's public API, no token. PATH -> GH_CODE (000 = unreachable), GH_BODY, and GH_WAIT:
-          # seconds to sleep before the next call when rate limited (403/429), from x-ratelimit-reset,
-          # clamped to 60..300; 0 otherwise.
-          ghcall(){ GH_WAIT=0
-                GH_CODE=$(curl -sS -m 30 -D "$STATE/gh.hdr" -o "$STATE/gh.out" -w '%{http_code}' -H 'Accept: application/vnd.github+json' "https://api.github.com$1" 2>/dev/null) || GH_CODE=000
-                GH_BODY=$(cat "$STATE/gh.out" 2>/dev/null || true); rm -f "$STATE/gh.out"
-                if [ "$GH_CODE" = 403 ] || [ "$GH_CODE" = 429 ]; then
-                  local reset; reset=$(tr -d '\r' < "$STATE/gh.hdr" 2>/dev/null | awk -F': ' 'tolower($1)=="x-ratelimit-reset"{print $2}')
-                  GH_WAIT=$(( ${reset:-0} - $(date +%s) )); [ "$GH_WAIT" -ge 60 ] || GH_WAIT=60; [ "$GH_WAIT" -le 300 ] || GH_WAIT=300
-                  log "GitHub rate limited (HTTP $GH_CODE); next call in ${GH_WAIT}s"
-                fi; }
-          # One look at Vercel's verdict on a sha: the newest GitHub deployment Vercel created for it
-          # (once the push mirror delivered the commit) and that deployment's newest status. Sets
-          # CI_STATE (success|failure|error|pending), VERCEL_URL (the preview), VERCEL_LOG (inspect page).
-          vercel_probe(){ local dep st; CI_STATE=pending; VERCEL_URL=""; VERCEL_LOG=""
-            ghcall "/repos/$GH_MIRROR/deployments?sha=$1&per_page=5"; [ "$GH_CODE" = 200 ] || return 0
-            dep=$(jq -r 'sort_by(.created_at) | last | .id // empty' <<<"$GH_BODY" 2>/dev/null || true); [ -n "$dep" ] || return 0
-            ghcall "/repos/$GH_MIRROR/deployments/$dep/statuses?per_page=1"; [ "$GH_CODE" = 200 ] || return 0
-            st=$(jq -c 'first // {}' <<<"$GH_BODY" 2>/dev/null || echo '{}')
-            case "$(jq -r '.state // ""' <<<"$st")" in success) CI_STATE=success;; failure) CI_STATE=failure;; error) CI_STATE=error;; esac
-            VERCEL_URL=$(jq -r '.environment_url // .target_url // empty' <<<"$st"); VERCEL_LOG=$(jq -r '.target_url // empty' <<<"$st"); }
-          # The preview URL as a PR comment, at most once per head sha (a marker in the comment, so a
-          # rerun of the loop does not post it again). sha PR
-          preview_comment(){ local tag="<!-- coder-loop vercel-preview $1 -->"
-            [ -n "${VERCEL_URL:-}" ] || return 0
+          # Optional preview link, never the CI verdict: the newest GitHub deployment of the sha on the
+          # mirror (Vercel) and its newest status. One look, no waiting, no token; any miss posts
+          # nothing. Sets PREVIEW_URL; posts it on the PR at most once per sha (a marker in the
+          # comment, so a rerun does not post it again). sha PR
+          preview_comment(){ local tag="<!-- coder-loop vercel-preview $1 -->" gh="https://api.github.com/repos/${GH_MIRROR:-}" dep
+            [ -n "${GH_MIRROR:-}" ] || return 0
+            dep=$(curl -sS -m 20 "$gh/deployments?sha=$1&per_page=5" 2>/dev/null | jq -r 'sort_by(.created_at) | last | .id // empty' 2>/dev/null) || dep=""
+            [ -n "$dep" ] || return 0
+            PREVIEW_URL=$(curl -sS -m 20 "$gh/deployments/$dep/statuses?per_page=1" 2>/dev/null \
+              | jq -r 'first | select(.state == "success") | .environment_url // .target_url // empty' 2>/dev/null) || PREVIEW_URL=""
+            [ -n "$PREVIEW_URL" ] || return 0
             if fj GET "/repos/$REPO/issues/$2/comments" | jq -e --arg m "$tag" 'any(.[]?; (.body // "") | contains($m))' >/dev/null 2>&1; then return 0; fi
-            say "$(printf 'Vercel preview of `%s`: %s\n\n%s' "${1:0:8}" "$VERCEL_URL" "$tag")" "$2"; mark "PR #$2: posted Vercel preview for ${1:0:8}"; }
+            say "$(printf 'Preview of `%s`: %s\n\n%s' "${1:0:8}" "$PREVIEW_URL" "$tag")" "$2"; mark "PR #$2: posted preview for ${1:0:8}"; }
 
-          # Wait (bounded) for CI on the PR head. Sets HEAD, CI_STATE (success|failure|error|timeout).
-          # CI = the Forgejo commit status, or Vercel's preview build when GH_MIRROR is set.
-          ci_wait(){ local deadline=$((SECONDS + ${CI_WAIT_S:-2700})) s n last="" DELAY=20
+          # PR json on stdin -> merged | closed | nothing (open)
+          pr_end(){ jq -r 'if .merged == true then "merged" elif .state == "closed" then "closed" else empty end' 2>/dev/null || true; }
+          # The PR was merged or closed under the loop (a human acted first): finish cleanly. merged ->
+          # close the issue if Forgejo did not, drop coder:working; closed -> needs-human. Callers `exit 0` after it.
+          pr_ended(){
+            if [ "$1" != merged ]; then needs_human "PR #$PR was closed without merging while the loop was running"; return 0; fi
+            mark "PR #$PR was merged before the loop finished"
+            [ "$(fj GET "/repos/$REPO/issues/$ISSUE" | jq -r '.state? // ""')" = closed ] \
+              || jq -n '{state:"closed"}' | fj PATCH "/repos/$REPO/issues/$ISSUE" - >/dev/null || true
+            label_rm coder:working
+            say "$(printf 'coder-loop run %s: PR #%s was merged before the loop finished, so it stopped there. Issue closed.\n\n- run: %s\n\nTimeline (UTC):\n```\n%s\n```' \
+              "$RUN_ID" "$PR" "$RUN_URL" "$(cat "$STATE/timeline")")"
+            gh_env STOP 1; }
+          # `Closes #ISSUE` in the PR body, so a merge at any point (even mid-loop) closes the issue:
+          # Forgejo closes on a closing keyword when the PR lands on the default branch (develop).
+          # Idempotent: once when the PR is first seen, again at the gate (a round may rewrite the body).
+          ensure_closes(){ local body; body=$(fj GET "/repos/$REPO/pulls/$PR" | jq -r '.body? // ""')
+            grep -qiE "(close[sd]?|fix(e[sd])?|resolve[sd]?) #$ISSUE\b" <<<"$body" && return 0
+            jq -n --arg b "$(printf '%s\n\nCloses #%s' "$body" "$ISSUE")" '{body:$b}' \
+              | fj PATCH "/repos/$REPO/pulls/$PR" - >/dev/null && mark "PR #$PR: added Closes #$ISSUE" || true; }
+
+          # Wait (bounded) for CI on the PR head: its CI_CONTEXT commit status, the one check branch
+          # protection requires. Sets HEAD and CI_STATE: success|failure|error|timeout, or
+          # merged|closed when the PR was merged or closed under the loop.
+          ci_wait(){ local deadline=$((SECONDS + ${CI_WAIT_S:-2700})) pr end last="" DELAY=20
             while :; do
-              GH_WAIT=0
-              HEAD=$(fj GET "/repos/$REPO/pulls/$1" 2>/dev/null | jq -r '.head.sha // empty' 2>/dev/null || true)
-              if [ -n "$HEAD" ] && [ -n "${GH_MIRROR:-}" ]; then
-                vercel_probe "$HEAD"; n=vercel
-              elif [ -n "$HEAD" ]; then
-                s=$(fj GET "/repos/$REPO/commits/$HEAD/status" 2>/dev/null || true)
-                CI_STATE=$(jq -r '.state // "pending"' <<<"$s" 2>/dev/null || echo pending)
-                n=$(jq -r '.statuses | length' <<<"$s" 2>/dev/null || echo 0)
-                [ "${n:-0}" -gt 0 ] || CI_STATE=pending   # no status yet is not green
-              fi
+              pr=$(fj GET "/repos/$REPO/pulls/$1" 2>/dev/null || true)
+              HEAD=$(jq -r '.head.sha // empty' <<<"$pr" 2>/dev/null || true)
+              end=$(pr_end <<<"$pr"); [ -z "$end" ] || { CI_STATE=$end; return 0; }
               if [ -n "$HEAD" ]; then
-                [ "$CI_STATE" = "$last" ] || { log "PR #$1 head ${HEAD:0:8} CI=$CI_STATE ($n statuses)"; last=$CI_STATE; }
+                CI_STATE=$(fj GET "/repos/$REPO/commits/$HEAD/status" 2>/dev/null | jq -r --arg c "$CI_CONTEXT" \
+                  '[.statuses[]? | select(.context == $c) | .status] | first // "pending"' 2>/dev/null) || CI_STATE=pending
+                [ -n "$CI_STATE" ] || CI_STATE=pending
+                [ "$CI_STATE" = "$last" ] || { log "PR #$1 head ${HEAD:0:8} $CI_CONTEXT=$CI_STATE"; last=$CI_STATE; }
                 case "$CI_STATE" in success|failure|error) return 0;; esac
               fi
               [ $SECONDS -lt $deadline ] || { CI_STATE=timeout; return 0; }
-              if [ "$GH_WAIT" -gt 0 ]; then sleep "$GH_WAIT"; else backoff "$DELAY"; fi
+              backoff "$DELAY"
             done; }
           # The failing CI job's log is not in the Forgejo API: find it in the forgejo container, copy it
           # out and read it (same route as api/app/core/chat/ci_output.py). Sets FAIL_JOB, EXCERPT (<=2500 chars).
           ci_excerpt(){ local ctx c j id="" path
-            if [ -n "${GH_MIRROR:-}" ]; then   # Vercel's build log needs a Vercel login; say what we know
-              FAIL_JOB=vercel
-              EXCERPT="the Vercel preview build of ${HEAD:0:8} ended $CI_STATE (log: ${VERCEL_LOG:-none}, Vercel login required). \`next build\` cannot run in your sandbox (Google Fonts); find the cause from the diff and \`pnpm --filter web typecheck\`"
-              return 0
-            fi
             ctx=$(fj GET "/repos/$REPO/commits/$HEAD/status" | jq -r '.statuses[] | select(.status == "failure" or .status == "error") | .context')
             FAIL_JOB=""
             while IFS= read -r c; do
@@ -287,6 +295,14 @@ jobs:
           iss=$(fj GET "/repos/$REPO/issues/$ISSUE")
           [ "$(jq -r .state <<<"$iss")" = open ] || { log "issue #$ISSUE is not open"; exit 1; }
           jq -e '[.labels[].name] | index("coder")' <<<"$iss" >/dev/null || { log "issue #$ISSUE has no coder label"; exit 1; }
+          # Drift check (this file is copied verbatim into other repos; see the header). Warns, never stops.
+          f=.forgejo/workflows/coder-loop.yml
+          mine=$(fj GET "/repos/$REPO/contents/$f?ref=${GITHUB_SHA:-}" | jq -r '.sha? // empty' 2>/dev/null) || mine=""
+          canon=$(fj GET "/repos/braeden6/homelab-meta/contents/$f?ref=develop" | jq -r '.sha? // empty' 2>/dev/null) || canon=""
+          if [ -n "$mine" ] && [ -n "$canon" ] && [ "$mine" != "$canon" ]; then
+            mark "coder-loop.yml drift: ${mine:0:8} here, ${canon:0:8} on homelab-meta develop"
+            say "$(printf '**coder-loop drift:** `%s` here (blob `%s`) differs from braeden6/homelab-meta develop (blob `%s`). This run uses the copy here; copy the canonical file over in a human/ PR (`.forgejo/` is protected from coders).' "$f" "${mine:0:8}" "${canon:0:8}")"
+          fi
           PREFIX='Scenario first: write Given/When/Then before reading the implementation; cite exact test assertions; smallest change; run the pre-push gates your instructions name, in the foreground, before pushing; never use background tasks'
           # b6 caps a task at 4000 chars (and `continue` appends ~350): clip the issue text, then add the run tag
           task=$(jq -rn --arg p "$PREFIX" --arg t "$(jq -r .title <<<"$iss")" --arg b "$(jq -r '.body // ""' <<<"$iss")" --arg r "$RUN_ID" '
@@ -338,6 +354,7 @@ jobs:
             needs_human "job $JOB did not produce a finished PR ($problem)"; exit 0
           done
           setv PR "$PR"; mark "job $JOB -> PR #$PR"
+          ensure_closes
 
       - name: 3. CI, evidence, review (fix and review rounds on the same PR)
         if: env.ISSUE != '' && env.STOP != '1'
@@ -347,6 +364,7 @@ jobs:
           b6call GET "/api/code-jobs/$JOB"; JV=$(jq -c .job <<<"$B6_BODY")   # the PR's current job (step 2 ended on it)
           while :; do
             ci_wait "$PR"; mark "PR #$PR head ${HEAD:0:8} CI=$CI_STATE"
+            case "$CI_STATE" in merged|closed) pr_ended "$CI_STATE"; exit 0;; esac
             if [ "$CI_STATE" != success ]; then
               [ "$CI_STATE" != timeout ] || { needs_human "CI on ${HEAD:0:8} did not finish within the wait limit"; exit 0; }
               [ "$fixes" -lt "$MAX_CI_FIX_ROUNDS" ] || { needs_human "CI still $CI_STATE on ${HEAD:0:8} after $fixes fix rounds"; exit 0; }
@@ -365,7 +383,7 @@ jobs:
                 + "\n_b6 lists every Bash call that mentions `ci-local.sh`; read the command, a PASS only means the call did not error._"
                 + "\n\n### Files touched\n\($files)"' <<<"$JV")
             say "$ev" "$PR"; mark "posted Coder evidence on PR #$PR"
-            [ -z "${GH_MIRROR:-}" ] || preview_comment "$HEAD" "$PR"
+            preview_comment "$HEAD" "$PR"
             # --- review
             B6_TIMEOUT=900 b6call POST /api/reviews/pr "$(jq -nc --argjson n "$PR" --arg r "$REPO_ID" '{repo_id:$r,pr_number:$n}')"
             [ "$B6_CODE" = 200 ] || { needs_human "review failed: HTTP $B6_CODE $(printf %.200s "$B6_BODY")"; exit 0; }
@@ -380,22 +398,17 @@ jobs:
             break
           done
           setv FIXES "$fixes"; setv REVIEWS "$reviews"; setv VERDICT "$VERDICT"; setv REVIEW_URL "${REVIEW_URL:-}"; setv HEAD "$HEAD"; setv CI_STATE "$CI_STATE"
-          setv VERCEL_URL "${VERCEL_URL:-}"
+          setv PREVIEW_URL "${PREVIEW_URL:-}"
 
       - name: 4. human gate (label + comment; never merge)
         if: env.ISSUE != '' && env.STOP != '1'
         run: |
           set -euo pipefail; . "$STATE/lib.sh"; . "$STATE/vars"
+          end=$(fj GET "/repos/$REPO/pulls/$PR" | pr_end); [ -z "$end" ] || { pr_ended "$end"; exit 0; }   # merged/closed during the review
           label_rm coder:working; label_add coder:ready
-          # Merging the PR closes the issue: Forgejo auto-closes on a closing keyword when the
-          # PR lands on the default branch (develop). Added once, at the gate, idempotently.
-          body=$(fj GET "/repos/$REPO/pulls/$PR" | jq -r '.body // ""')
-          if ! grep -qiE "(close[sd]?|fix(e[sd])?|resolve[sd]?) #$ISSUE\b" <<<"$body"; then
-            jq -n --arg b "$(printf '%s\n\nCloses #%s' "$body" "$ISSUE")" '{body:$b}' \
-              | fj PATCH "/repos/$REPO/pulls/$PR" - >/dev/null && mark "PR #$PR: added Closes #$ISSUE"
-          fi
+          ensure_closes
           warn=""; [ "$VERDICT" != concerns ] || warn=$'\n\n**Reviewer concerns are still open after the review round; read the review before merging.**'
-          [ -z "${VERCEL_URL:-}" ] || warn="$warn"$'\n\n'"Vercel preview: $VERCEL_URL"
+          [ -z "${PREVIEW_URL:-}" ] || warn="$warn"$'\n\n'"Preview: $PREVIEW_URL"
           say "$(printf '**coder-loop run %s: ready for a human.** Nothing is merged; develop/main untouched.\n\n- PR: %s/%s/pulls/%s\n- CI on `%s`: **%s**\n- Review verdict: **%s** (%s)\n- Rounds: CI fix %s of %s, review %s of 1, retries %s of 1%s\n\nJobs:\n%s\n\nTimeline (UTC):\n```\n%s\n```' \
             "$RUN_ID" "$FORGEJO" "$REPO" "$PR" "${HEAD:0:8}" "$CI_STATE" "$VERDICT" "${REVIEW_URL:-no url}" "$FIXES" "$MAX_CI_FIX_ROUNDS" "$REVIEWS" "$RETRIED" "$warn" "$(jobs_md)" "$(cat "$STATE/timeline")")"
           mark "gate: coder:ready on issue #$ISSUE"
