@@ -1,0 +1,59 @@
+name: CI
+
+# Forgejo CI for every PR into develop/main (coder-* and human/* branches alike).
+# CD is not here: the push mirror to GitHub Braeden6/monorepo deploys (Vercel,
+# .github/workflows/personal-website.yaml), and Forgejo ignores .github/.
+#
+# One required context: `CI / fast (pull_request)`. develop's branch protection
+# requires it and the b6 coder loop (coder-loop.yml) reads it -- the same name
+# as in braeden6/homelab-meta, so the loop has one CI rule for every repo.
+# `fast` runs nothing itself: Forgejo reports a SKIPPED job as `success`, so it
+# asserts the real job's result instead of trusting its status.
+#
+# Runner: `ubuntu-latest` = a throwaway node:24-bookworm container on server5's
+# docker runner. Never `host` (bare server5) and never `docker` (that label is
+# `docker:host`: it runs inside the runner container, which holds the host's
+# docker socket) -- these jobs build coder-written code.
+on:
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: pnpm (the version pinned in package.json packageManager)
+        run: corepack enable && pnpm --version
+      - run: pnpm install --frozen-lockfile
+      # The root biome, as the coder gate (b6 gates.py `next-web`) runs it:
+      # apps/web pins biome 1.x but biome.json is written for biome 2.
+      - run: pnpm exec biome check apps/web
+      - run: pnpm --filter web typecheck
+      # Placeholder public env (no secrets): the env schema requires these at
+      # build time. next/font/google fetches Google Fonts; the runner reaches it.
+      - name: next build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          NEXT_PUBLIC_UMAMI_WEBSITE_ID: ci-placeholder
+          NEXT_PUBLIC_DOMAIN: localhost
+          NEXT_PUBLIC_REDIRECT_URL: http://localhost:3000
+        run: pnpm --filter web build
+
+  fast:
+    name: fast
+    if: ${{ always() }}
+    needs: [web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: every real job succeeded
+        run: test "${{ needs.web.result }}" = success
