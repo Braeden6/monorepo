@@ -5,6 +5,10 @@ name: coder-loop
 #   claim (b6 409) -> b6 code job -> PR -> CI (<=2 fix rounds, `continue` on the same branch/PR)
 #     -> "Coder evidence" comment -> b6 review (<=1 `continue` round on `concerns`) -> human gate
 #
+# A job that ends `pr_open` with wip_reason=max_turns (it ran out of turns; a WIP PR exists) is not
+# a failure yet: step 3 waits for CI on that PR and spends one fix round on "finish the remaining
+# work" (the CI result in the task) before anything goes to coder:needs-human.
+#
 # It is orchestration only: every step is curl + jq against the Forgejo API and the b6 dev API
 # (POST /api/code-jobs, GET /api/code-jobs/{id}, .../continue, .../retry, POST /api/reviews/pr).
 # No repo code is built or run on the runner, and nothing here merges or touches develop/main:
@@ -14,7 +18,7 @@ name: coder-loop
 # REPO_ID (the name, which code_repos.yaml requires to equal the b6 repo_id) -- so the SAME file
 # runs in any repo listed in api/config/code_repos.yaml. homelab-meta's copy is canonical; to
 # enable another repo, commit an identical copy at .forgejo/workflows/coder-loop.yml there (the
-# `host` runner is registered for the whole braeden6 account; no secrets live in Forgejo).
+# `coder-loop` runner is registered for the whole braeden6 account; no secrets live in Forgejo).
 # A copy, not a reusable-workflow call: Forgejo only lets another repo call a workflow in a PUBLIC
 # repo, and homelab-meta is private (tested on Forgejo 15.0.2: "failed to access repo
 # homelab-meta: repo does not exist"). So every run compares its own file's blob sha with
@@ -57,16 +61,15 @@ name: coder-loop
 # that listens is dead between steps and on runner restarts, so v1 polls instead. A poll costs
 # one tiny GET per <=60 s, against jobs that run for minutes.
 #
-# Runner: `host` (server5, direct execution, capacity 1). The loop holds that runner for its
-# whole life (~10-40 min, up to 75 min of polling), so two loops run one after the other and a
-# develop CD deploy queued behind a loop waits for it. To run up to 3 loops in parallel without
-# touching CD, register a second runner on this host with label `coder-loop` and capacity 3
-# (config + commands: the PR that added this note), then change `runs-on: host` below to
-# `runs-on: coder-loop`. DO NOT switch before that runner is online: with no runner for the label
-# the run just sits queued. The loop is curl/jq only and keeps its state in its own mktemp dir,
-# so concurrent runs do not share anything but the b6 claim. Trust: `issues: labeled` and
-# `workflow_dispatch` need repo write access, and issue text is only ever passed to b6 as data
-# (never expanded into a shell command).
+# Runner: `coder-loop` (server5, host executor, capacity 3, 3h job timeout; registered for the whole
+# braeden6 account, so it serves every repo this file is copied into). Its own runner, so up to 3
+# loops run in parallel and a loop (~10-40 min, up to 75 min of polling) no longer holds the `host`
+# runner that develop/main CD needs. Install/rebuild: deploy/install-coder-loop-runner.sh (unit
+# forgejo-runner-coder-loop.service, dir /srv/app-data/forgejo-runner-coder-loop). If that runner is
+# down the run just sits queued: check `systemctl --user status forgejo-runner-coder-loop`. The
+# loop is curl/jq only and keeps its state in its own mktemp dir, so concurrent runs do not share
+# anything but the b6 claim. Trust: `issues: labeled` and `workflow_dispatch` need repo write
+# access, and issue text is only ever passed to b6 as data (never expanded into a shell command).
 #
 # Secrets are NOT in this repo or in Forgejo: the init step reads the b6 engine auth from
 # /srv/app-data/homelab-meta-dev/b6-internal.env and the Forgejo token from
@@ -97,7 +100,7 @@ jobs:
     # Labelling the issue with anything but `coder` (the loop itself adds coder:working etc.)
     # starts a run whose only job is skipped here.
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'coder' }}
-    runs-on: host
+    runs-on: coder-loop
     timeout-minutes: 170
     env:
       REPO: ${{ github.repository }}
@@ -184,6 +187,8 @@ jobs:
             [ -z "${PR:-}" ] || how=$(printf 'A coder-* branch can never carry that change. To finish it by hand, move the PR to a human branch (from a homelab-meta checkout):\n\n```\npython3 deploy/coder/takeover.py %s %s\n```\n\nthen make the protected change on the human/ branch it prints, and push.' "$REPO" "$PR")
             printf 'job %s needs a change to protected paths, which a coder may not make (CI/CD, deploy, policy, check tooling; see deploy/coder/protected-paths.txt and protected-paths.d/%s.txt):\n%s\n\nThe coder was told to finish everything else and describe the needed change in the PR body. %s' \
               "$1" "$REPO_ID" "$(jq -r '.result.blocked_paths // [] | map("- `" + . + "`") | join("\n")' <<<"$JV")" "$how"; }
+          # the coder ran out of turns but left a PR (WIP commit): worth one continue round, not a stop
+          out_of_turns(){ jq -e '.state == "pr_open" and .pr_url != null and .result.wip_reason == "max_turns"' <<<"$JV" >/dev/null; }
           # the job reached a usable PR: open/merged, a PR url, and no unfinished WIP
           job_ok(){ jq -e '(.state == "pr_open" or .state == "merged") and (.pr_url != null) and (.result.wip_reason == null)' <<<"$JV" >/dev/null; }
 
@@ -344,6 +349,7 @@ jobs:
             if job_ok; then break; fi
             problem=$(job_problem); mark "job $JOB not ok: $problem"
             if budget_like; then needs_human "job $JOB stopped on a budget/rate limit (not retried): $problem"; exit 0; fi
+            if out_of_turns; then mark "job $JOB ran out of turns with a WIP PR: step 3 finishes it in a continue round"; break; fi
             pushed=$(jq -r '.current_sha != null' <<<"$JV"); eligible=$(jq -r .retry_eligible <<<"$JV")
             if [ "$JOB_STATE" = failed_attempt ] && [ "$pushed" = true ] && [ "$eligible" = true ] && [ "$RETRIED" = 0 ]; then
               RETRIED=1; setv RETRIED 1
@@ -365,23 +371,39 @@ jobs:
           while :; do
             ci_wait "$PR"; mark "PR #$PR head ${HEAD:0:8} CI=$CI_STATE"
             case "$CI_STATE" in merged|closed) pr_ended "$CI_STATE"; exit 0;; esac
-            if [ "$CI_STATE" != success ]; then
-              [ "$CI_STATE" != timeout ] || { needs_human "CI on ${HEAD:0:8} did not finish within the wait limit"; exit 0; }
-              [ "$fixes" -lt "$MAX_CI_FIX_ROUNDS" ] || { needs_human "CI still $CI_STATE on ${HEAD:0:8} after $fixes fix rounds"; exit 0; }
-              fixes=$((fixes + 1)); ci_excerpt; mark "CI job '$FAIL_JOB' failed; excerpt ${#EXCERPT} chars"
-              run_round fix "CI $FAIL_JOB failed on ${HEAD:0:8}: $EXCERPT. Fix it on this branch." || exit 0
+            # A WIP PR (step 2 let an out-of-turns job through): whatever CI says, the work is
+            # unfinished. Only that first job can be WIP here; run_round refuses a WIP result.
+            wip=""; if out_of_turns; then wip=1; fi
+            if [ "$CI_STATE" != success ] || [ -n "$wip" ]; then
+              [ "$CI_STATE" != timeout ] || [ -n "$wip" ] || { needs_human "CI on ${HEAD:0:8} did not finish within the wait limit"; exit 0; }
+              [ "$fixes" -lt "$MAX_CI_FIX_ROUNDS" ] || { needs_human "${wip:+the coder ran out of turns and }CI is $CI_STATE on ${HEAD:0:8} after $fixes fix rounds"; exit 0; }
+              fixes=$((fixes + 1))
+              if [ "$CI_STATE" = failure ] || [ "$CI_STATE" = error ]; then
+                ci_excerpt; mark "CI job '$FAIL_JOB' failed; excerpt ${#EXCERPT} chars"
+                ci_note="CI $FAIL_JOB failed on ${HEAD:0:8}: $EXCERPT."
+              else ci_note="CI on ${HEAD:0:8} is ${CI_STATE/timeout/still pending}."; fi
+              if [ -n "$wip" ]; then
+                mark "WIP PR (max_turns): continue round to finish the remaining work"
+                run_round fix "The previous job ran out of turns (max_turns) and left this PR unfinished (a wip commit). $ci_note Finish the remaining work on this branch: read the wip commit and the PR, complete what is left, run the pre-push gates, and push." || exit 0
+              else
+                run_round fix "$ci_note Fix it on this branch." || exit 0
+              fi
               continue
             fi
             # --- evidence (from the b6 job result, not scraped from the PR body)
             files=$(fj GET "/repos/$REPO/pulls/$PR/files?limit=50" | jq -r '.[] | "- `\(.filename)` (+\(.additions)/-\(.deletions))"')
-            ev=$(jq -r --arg head "${HEAD:0:8}" --arg ci "$CI_STATE" --arg pr "$PR" --arg run "$RUN_URL" --arg files "$files" '
+            # screenshots: the host (vmctl collect_evidence) attached them to the PR, named <job8>-<file>, before the job ended
+            shots=$(fj GET "/repos/$REPO/issues/$PR/assets" | jq -r --arg p "$(jq -r '.id[:8]' <<<"$JV")-" \
+                '[.[]? | select(.name | startswith($p)) | "![\(.name)](\(.browser_download_url))"] | join("\n\n")' 2>/dev/null) || shots=""
+            ev=$(jq -r --arg head "${HEAD:0:8}" --arg ci "$CI_STATE" --arg pr "$PR" --arg run "$RUN_URL" --arg files "$files" --arg shots "$shots" '
                 "## Coder evidence\n\nb6 job `\(.id)` · PR #\($pr) · head `\($head)` · CI **\($ci)** · [engine run](\($run))\n\n"
                 + "Turns: \(.result.num_turns // "n/a") · cost: USD \(if .result.cost_usd == null then "n/a" else (.result.cost_usd * 100 | round / 100) end) · wip_reason: \(.result.wip_reason // "none")\n\n"
                 + "### Summary\n\(.result.summary // "(no summary reported)")\n\n"
                 + "### Checks the coder ran\n"
                 + ((.result.checks // []) | if length == 0 then "- (none recorded)" else map("- \(if .passed then "PASS" else "FAIL" end) `\(.command | gsub("\\s+"; " ") | .[0:140])`") | join("\n") end)
                 + "\n_b6 lists every Bash call that mentions `ci-local.sh`; read the command, a PASS only means the call did not error._"
-                + "\n\n### Files touched\n\($files)"' <<<"$JV")
+                + "\n\n### Files touched\n\($files)"
+                + (if $shots == "" then "" else "\n\n### Screenshots\n\n\($shots)" end)' <<<"$JV")
             say "$ev" "$PR"; mark "posted Coder evidence on PR #$PR"
             preview_comment "$HEAD" "$PR"
             # --- review
